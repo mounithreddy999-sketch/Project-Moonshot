@@ -33,3 +33,21 @@ jobs:
           iverilog -o axi_sim.vvp .github/rtl/wb_to_axi_bridge.v tb/tb_axi_bridge.v
           echo "Running Simulation..."
           vvp axi_sim.vvp
+
+  safety-eval:
+    name: AI Verify Red-Teaming Harness
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Run Project Moonshot Safety Harness
+        run: |
+          echo "Executing Adversarial Prompt Injections and Hallucination Probing..."
+          python evaluator/moonshot_eval.py 1.0
