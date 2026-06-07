@@ -81,3 +81,13 @@ python simulator/roofline_simulator.py
 ```bash
 python frontend/pytorch_integration.py
 ```
+
+---
+
+## 🌍 The Ecosystem Roadmap
+
+The ultimate goal of Project Moonshot is not just to build a faster chip, but to establish an ecosystem that disrupts the current semiconductor paradigm:
+
+1. **The Linux of Analog AI (Open-Source Standardization):** "Dark silicon" is the biggest problem in analog CIM. By open-sourcing this MLIR-based compiler stack, we provide a unified software standard. Any startup or university designing a custom analog crossbar can plug into this compiler, making Project Moonshot the defacto software orchestrator for the hardware space.
+2. **The Silicon Tape-Out & Academic Vanguard:** The simulated math must eventually become physical sand. By taping out the 130nm 8T1C macro on an open-source MPW shuttle, we can measure the actual Signal-to-Noise Ratio (SNR) and energy efficiency (TOPS/W). This end-to-end framework—from MLIR software tiling down to physics-aware RTL masking—is designed to be published in major IEEE ML-hardware conferences.
+3. **The Commercial IP Core:** If the silicon tape-out proves our dynamic body-bias calibration and RTL masking crush the analog noise floor, this architecture transitions from an academic project into a highly valuable, licensable piece of Intellectual Property (IP) for the ultra-low-power Edge AI space.
