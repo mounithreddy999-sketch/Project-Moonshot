@@ -96,6 +96,18 @@ transform.sequence failures(propagate) {{
             padding_values [0.0 : f16, 0.0 : f16, 0.0 : f16]
             padding_dimensions [0, 1, 2]
 """
+        
+        # 5. Inject Asynchronous DMA Prefetching (Double-Buffering)
+        mlir_payload += f"""
+  // 4. Promote the memref.subview slices into explicit SRAM buffer allocations
+  %allocated = transform.structured.hoist_pad %padded 
+               by [1, 1, 1] 
+
+  // 5. Apply Software Pipelining to overlap Compute and DMA across the CoWoS interposer
+  %pipelined = transform.loop.pipeline %tiled_loops 
+               scheduling_latency 1 
+               pipeline_depth 2 
+"""
         mlir_payload += "}\n"
         
         print("\n[PyTorch Frontend] Emitted Transform Dialect:")
