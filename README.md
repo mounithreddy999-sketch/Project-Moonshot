@@ -19,6 +19,38 @@ Project Moonshot executes on three major vectors:
 
 ---
 
+## 📈 The Architectural Interposer Challenge (Roofline Model)
+
+When you transition from a single monolithic chip to a 2.5D chiplet architecture on a Silicon Interposer (like TSMC's CoWoS), you introduce a third variable to the roofline: Die-to-Die (D2D) Interconnect Bandwidth.
+
+The fundamental balancing equation for a matrix multiplication distributed across multiple CIM chiplets is:
+$$\text{Arithmetic Intensity} = \frac{2 \cdot M \cdot N \cdot K}{\text{Bytes}_{\text{HBM}} + \text{Bytes}_{\text{D2D}}}$$
+
+If your D2D PHY (Physical Layer) latency or throughput cannot keep pace with how fast your analog arrays calculate partial products, your high-efficiency moonshot will stall.
+
+### 22nm RRAM + 2.5D Chiplet Validation
+Using the included `roofline_simulator.py`, we can simulate the bottleneck points for our custom architectures.
+
+<div align="center">
+  <img src="docs/roofline_plot.png" width="600" alt="Roofline Bottleneck Simulation">
+</div>
+
+```text
+============================================================
+        PROJECT MOONSHOT ARCHITECTURAL SIMULATOR RESULTS       
+============================================================
+Target Configuration: 22nm RRAM | 2.5D Chiplet (CoWoS) | In-Package HBM3e
+Workload Footprint:   8192x8192 GEMM Execution
+Arithmetic Intensity: 2730.67 FLOPs/Byte
+------------------------------------------------------------
+Effective Throughput: 150.00 TOPS
+System Efficiency:    21.25 TOPS/W
+Primary Bottleneck:   Balanced Datacenter Mode: Optimal alignment between high-density analog RRAM compute, D2D interposer channels, and HBM3e throughput.
+============================================================
+```
+
+---
+
 ## 🗂️ Project Structure
 
 This repository is primarily focused on **The Software Wall** — bridging the gap between high-level machine learning frameworks and the physical analog tiles.
@@ -31,7 +63,8 @@ Project-Moonshot/
 ├── frontend/       # High-level framework integration
 │   └── pytorch_integration.py # Mock PyTorch bindings to intercept standard layers
 ├── simulator/      # Architectural Simulators
-│   └── chiplet_interposer_sim.py # Roofline simulator modeling 2.5D HBM/CoWoS bottlenecks
+│   └── roofline_simulator.py  # 2.5D Chiplet / Roofline execution bounds simulator
+├── docs/           # Generated metrics and plots
 └── README.md       # This file
 ```
 
@@ -41,7 +74,7 @@ Project-Moonshot/
 
 **Run the 2.5D Interposer Architectural Simulator:**
 ```bash
-python simulator/chiplet_interposer_sim.py
+python simulator/roofline_simulator.py
 ```
 
 **Test the PyTorch Frontend Interception:**
