@@ -1,0 +1,35 @@
+name: Hardware CI/CD Verification
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  simulate-rtl:
+    name: Icarus Verilog RTL Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+
+      - name: Verify CIM Mask Controller
+        run: |
+          echo "Compiling Mask Controller..."
+          iverilog -o mask_sim.vvp .github/rtl/cim_mask_controller.v tb/tb_mask_controller.v
+          echo "Running Simulation..."
+          vvp mask_sim.vvp
+
+      - name: Verify Wishbone-to-AXI Bridge
+        run: |
+          echo "Compiling AXI Bridge..."
+          iverilog -o axi_sim.vvp .github/rtl/wb_to_axi_bridge.v tb/tb_axi_bridge.v
+          echo "Running Simulation..."
+          vvp axi_sim.vvp
