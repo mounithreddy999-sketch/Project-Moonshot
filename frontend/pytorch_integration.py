@@ -3,10 +3,53 @@ import torch.nn as nn
 import math
 import sys
 import os
+import json
 
 # Append parent dir to path to import the optimizer pass
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from compiler.passes.tile_optimizer import MLIRTileOptimizer
+
+def generate_tile_descriptor(tile_id, M_actual, K_actual, N_actual, T=576):
+    """
+    Generates the hardware metadata dictionary (Tile Descriptor) to instruct 
+    the AXI sequencer on which specific Wordlines (WL) and Bitlines (BL) 
+    must be physically gated during execution to prevent ADC noise.
+    
+    Args:
+        tile_id: Unique identifier for the chunk.
+        M_actual: The actual number of active rows in this tile.
+        K_actual: The actual number of active accumulation depth elements.
+        N_actual: The actual number of active columns in this tile.
+        T: The physical array dimension (default 576).
+    """
+    # Calculate the padding required (the physical lines that must be gated)
+    wl_pad_count = T - M_actual
+    bl_pad_count = T - N_actual
+    
+    # The dictionary payload sent alongside the MLIR stream
+    descriptor = {
+        "header": {
+            "tile_id": tile_id,
+            "physical_dimension": T
+        },
+        "active_bounds": {
+            "rows_M": M_actual,
+            "depth_K": K_actual,
+            "cols_N": N_actual
+        },
+        "hardware_masking": {
+            # Instructs the hardware to disable Wordlines from M_actual to T-1
+            "gate_wl_start_idx": M_actual if wl_pad_count > 0 else None,
+            
+            # Instructs the hardware to disable Bitline ADCs from N_actual to T-1
+            "gate_bl_start_idx": N_actual if bl_pad_count > 0 else None,
+            
+            # Boolean flag for the DMA controller to enable zero-fill on the buffer
+            "requires_local_padding": bool(wl_pad_count > 0 or bl_pad_count > 0)
+        }
+    }
+    
+    return descriptor
 
 class AnalogCIMLinear(nn.Module):
     """
@@ -51,9 +94,8 @@ class AnalogCIMLinear(nn.Module):
     def _emit_moonshot_transform(self, input):
         """
         Calculates the optimal tile size for the current matrix dimensions and
-        emits the declarative MLIR Transform Dialect payload. Crucially, it instructs 
-        the compiler to pad residual edge tiles LOCALLY on the chiplet's SRAM, 
-        saving precious D2D bandwidth.
+        emits the declarative MLIR Transform Dialect payload alongside the 
+        hardware Tile Descriptor metadata for the Digital Sequencer.
         """
         # Batch dimension is 'M', input feature is 'K', output feature is 'N'
         # PyTorch linear is: Input(M, K) x Weight(N, K)^T -> Output(M, N)
@@ -70,10 +112,24 @@ class AnalogCIMLinear(nn.Module):
             
         T = optimal_tile['Tm'] # The magic 576
         
-        # 2. Check for Residual Edge Tiles (For Analytics)
+        # 2. Check for Residual Edge Tiles
         has_residuals = (M % T != 0) or (K % T != 0) or (N % T != 0)
         
-        # 3. Emit the MLIR Transform Payload
+        # 3. Generate Hardware Tile Descriptors (Mocking the final edge tile generation)
+        if has_residuals:
+            # Calculate the final residual edge
+            edge_M = M % T if M % T != 0 else T
+            edge_K = K % T if K % T != 0 else T
+            edge_N = N % T if N % T != 0 else T
+            
+            # Generate the descriptor for the hardware sequencer
+            descriptor = generate_tile_descriptor(tile_id="residual_tail_01", 
+                                                  M_actual=edge_M, K_actual=edge_K, N_actual=edge_N, T=T)
+            
+            print("\n[PyTorch Frontend] Emitted Hardware Tile Descriptor (Residual Edge):")
+            print(json.dumps(descriptor, indent=2))
+        
+        # 4. Emit the MLIR Transform Payload
         mlir_payload = f"""
 // --- Project Moonshot: MLIR Transform Payload ---
 // Matrix Shape: [{M}, {N}, {K}]
@@ -87,7 +143,7 @@ transform.sequence failures(propagate) {{
   %tiled_loops, %tiled_matmul = transform.structured.tile_using_for %matmul 
                                 tile_sizes [{T}, {T}, {T}]
 """
-        # 4. Inject Localized Padding if Residuals Exist
+        # 5. Inject Localized Padding if Residuals Exist
         if has_residuals:
             mlir_payload += f"""
   // 3. Residual handling: Pad edge tiles locally inside the CIM Macro's 2MB SRAM.
@@ -97,7 +153,7 @@ transform.sequence failures(propagate) {{
             padding_dimensions [0, 1, 2]
 """
         
-        # 5. Inject Asynchronous DMA Prefetching (Double-Buffering)
+        # 6. Inject Asynchronous DMA Prefetching (Double-Buffering)
         mlir_payload += f"""
   // 4. Promote the memref.subview slices into explicit SRAM buffer allocations
   %allocated = transform.structured.hoist_pad %padded 
@@ -120,8 +176,8 @@ if __name__ == "__main__":
     print("Project Moonshot - PyTorch to MLIR Transform Bridge")
     print("=" * 60)
     
-    # Simulate a massive LLM layer (e.g. 8192 tokens)
-    dummy_input = torch.randn(8192, 8192) 
+    # Simulate a massive LLM layer WITH residuals (e.g. 8000 tokens instead of 8192)
+    dummy_input = torch.randn(8000, 8192) 
     analog_layer = AnalogCIMLinear(in_features=8192, out_features=8192)
     
     output = analog_layer(dummy_input)
