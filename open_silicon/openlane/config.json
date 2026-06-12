@@ -1,0 +1,37 @@
+{
+    "DESIGN_NAME": "user_project_wrapper",
+    "VERILOG_FILES": [
+        "dir::../../rtl/user_project_wrapper.v",
+        "dir::../../rtl/analog_cim_controller.v"
+    ],
+    "CLOCK_PORT": "wb_clk_i",
+    "CLOCK_PERIOD": 10.0,
+    
+    "//": "==========================================================",
+    "//": " MOONSHOT CUSTOM FLOORPLAN & IR DROP MITIGATION",
+    "//": "==========================================================",
+    "//": " Because our mathematical simulations proved that IR drop",
+    "//": " (center voltage sag) causes catastrophic MSE degradation",
+    "//": " in Analog CIM arrays, we are heavily over-provisioning",
+    "//": " the Power Delivery Network (PDN).",
+    
+    "FP_SIZING": "absolute",
+    "DIE_AREA": "0 0 2920 3520",
+    
+    "FP_PDN_CORE_RING": 1,
+    "FP_PDN_CORE_RING_VWIDTH": 3.1,
+    "FP_PDN_CORE_RING_HWIDTH": 3.1,
+    "FP_PDN_VOFFSET": 14.0,
+    "FP_PDN_VPITCH": 25.0,
+    "FP_PDN_HOFFSET": 14.0,
+    "FP_PDN_HPITCH": 25.0,
+    
+    "//": " Leaving 60% of the die empty for massive analog macro routing",
+    "PL_TARGET_DENSITY": 0.40,
+    
+    "VDD_NETS": ["vccd1", "vdda1", "vdda2"],
+    "GND_NETS": ["vssd1", "vssa1", "vssa2"],
+    
+    "DIODE_INSERTION_STRATEGY": 4,
+    "ROUTING_CORES": 8
+}
