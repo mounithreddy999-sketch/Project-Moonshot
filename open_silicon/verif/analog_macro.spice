@@ -1,0 +1,40 @@
+* Project Moonshot: Analog Compute-in-Memory SPICE Netlist
+* Simulates a 1x4 SRAM cell array driving a bitline for Analog MAC calculation.
+
+.lib "/usr/local/share/pdk/sky130A/libs.tech/ngspice/sky130.lib.spice" tt
+
+* Power Supply
+Vdd VDD 0 3.3V
+Vgnd GND 0 0V
+
+* Input Wordline Pulses (Activations)
+Vwl0 WL0 0 pulse(0 3.3 1n 0.1n 0.1n 5n 10n)
+Vwl1 WL1 0 pulse(0 3.3 1n 0.1n 0.1n 5n 10n)
+Vwl2 WL2 0 pulse(0 3.3 1n 0.1n 0.1n 5n 10n)
+Vwl3 WL3 0 pulse(0 3.3 1n 0.1n 0.1n 5n 10n)
+
+* SRAM Cell Equivalents (Weights)
+* For simulation, assume W0=1, W1=1, W2=0, W3=1
+* If W=1, the access transistor connects the bitline to VDD through a load resistor.
+* If W=0, the access transistor is disconnected.
+
+* Access Transistors (SkyWater 130nm NFET)
+XM0 BL WL0 VDD VDD sky130_fd_pr__nfet_01v8 W=0.42u L=0.15u
+XM1 BL WL1 VDD VDD sky130_fd_pr__nfet_01v8 W=0.42u L=0.15u
+* XM2 BL WL2 GND GND sky130_fd_pr__nfet_01v8 W=0.42u L=0.15u (Weight = 0, so doesn't pull up)
+XM3 BL WL3 VDD VDD sky130_fd_pr__nfet_01v8 W=0.42u L=0.15u
+
+* Bitline Capacitance (Parasitics)
+Cbl BL 0 500fF
+
+* Pre-charge Transistor (Active Low)
+Vpre PRE_B 0 pulse(3.3 0 0 0.1n 0.1n 0.5n 10n)
+Xpre BL PRE_B GND GND sky130_fd_pr__nfet_01v8 W=1.0u L=0.15u
+
+* Transient Analysis
+.tran 0.1n 20n
+
+* Measurements
+.measure tran V_BL_Final MAX V(BL) from=2n to=10n
+
+.end
