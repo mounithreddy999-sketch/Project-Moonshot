@@ -6,7 +6,7 @@
 BLOCKS = user_project_wrapper
 
 # OpenLane Configuration
-OPENLANE_TAG ?= 2023.05.01
+OPENLANE_TAG ?= latest
 OPENLANE_IMAGE_NAME ?= efabless/openlane:$(OPENLANE_TAG)
 
 # The physical build command
@@ -19,8 +19,13 @@ harden:
 	@echo " This will synthesize the RTL, floorplan the die, place the cells,"
 	@echo " route the interconnects, and generate the physical GDSII file."
 	@echo "==================================================================="
-	docker run -it -v $(PWD):/project -w /project $(OPENLANE_IMAGE_NAME) \
-		flow.tcl -design openlane -tag moonshot_physical_build
+	docker run \
+		-v $(PWD):/project \
+		-v $(PDK_ROOT):$(PDK_ROOT) \
+		-e PDK_ROOT=$(PDK_ROOT) \
+		-w /project \
+		$(OPENLANE_IMAGE_NAME) \
+		flow.tcl -design openlane -tag moonshot_physical_build -overwrite
 
 .PHONY: clean
 clean:

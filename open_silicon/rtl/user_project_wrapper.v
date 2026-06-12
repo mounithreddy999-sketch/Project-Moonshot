@@ -13,6 +13,10 @@
 // limitations under the License.
 
 `default_nettype none
+
+// Efabless Caravel Defines
+`define MPRJ_IO_PADS 38
+
 /*
  *-------------------------------------------------------------
  *
