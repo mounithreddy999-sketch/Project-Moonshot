@@ -77,16 +77,15 @@ module user_project_wrapper #(
 );
 
     // -------------------------------------------------------------
-    // PROJECT MOONSHOT: ANALOG CIM MACRO INSTANTIATION
+    // PROJECT MOONSHOT: DIGITAL CIM MAC TILE INSTANTIATION
     // -------------------------------------------------------------
-    // This instantiates our Analog Compute-in-Memory (ACIM) controller
-    // and wires it to the Caravel Wishbone bus for the SoC CPU to drive.
+    // Instantiates the 8x8 INT8 systolic MAC array (C = A x B) and wires it
+    // to the Caravel Wishbone bus for the SoC CPU to drive. The analog
+    // charge-domain crossbar remains a behavioral model (future hard macro).
 
-    analog_cim_controller #(
-        .WL_WIDTH(256),
-        .BL_WIDTH(256),
-        .ADC_RES(8)
-    ) moonshot_analog_macro (
+    cim_mac_controller #(
+        .N(8)
+    ) moonshot_cim_tile (
     `ifdef USE_POWER_PINS
         .vdda1(vdda1),
         .vssa1(vssa1),

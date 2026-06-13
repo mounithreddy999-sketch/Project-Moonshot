@@ -24,7 +24,8 @@ This repo is honest about the line between *simulated/designed* and *physically 
 | **Analog-CIM physics + AI calibration simulation** | ✅ **Runnable** | Python physics engines + sklearn/PyTorch calibrators. Reproduces thermal-drift failure and adaptive recovery (run it yourself — see below). |
 | **Heterogeneous chiplet compiler / roofline / safety eval** | ✅ **Runnable** | Coherent Python models of the 2×2 mesh router, roofline bounds, and an AI red-team gate. |
 | **Physical tape-out of the Caravel wrapper** | ✅ **Clean GDS** | OpenLane really ran and produced a DRC/LVS-clean GDSII of the `user_project_wrapper` interface. |
-| **Synthesizable CIM *compute* datapath** | ⏳ **Next milestone** | The hardened RTL is currently a Wishbone interface stub (244 logic cells). The MAC/crossbar compute path is modeled in software but not yet synthesizable RTL. |
+| **Synthesizable CIM *compute* datapath** | ✅ **RTL-complete & sim-verified** | `cim_mac_controller.v` — an 8×8 INT8 **systolic MAC array** (64 PEs, `C = A×B`) on the Wishbone bus. Verified with iverilog: **512 checks, 0 errors**. Re-hardening it to GDS (Linux/WSL OpenLane) is the remaining step. |
+| **Physical re-harden of the MAC tile** | ⏳ **Next milestone** | The GDS/metrics in this repo still reflect the *earlier* interface stub. Re-running OpenLane on the new MAC RTL will lift `synth_cell_count` from 244 into the tens of thousands. |
 
 ---
 
@@ -40,7 +41,7 @@ The repository chronicles the journey from Python MLIR-style routing, to Scikit-
 
 ## 🏛️ System Architecture *(target architecture — modeled end-to-end in software)*
 
-> The diagrams below describe the **target** heterogeneous architecture. It is fully modeled in the Python simulation stack (`simulator/`). The physical tape-out in this repo hardens the digital Caravel interface to that architecture; the analog compute macro is a behavioral model (see [Tape-Out](#-physical-tape-out-interface-feasibility-vehicle)).
+> The diagrams below describe the **target** heterogeneous architecture, fully modeled in the Python simulation stack (`simulator/`). The **digital** CIM MAC tile is now implemented as synthesizable, simulation-verified RTL (`open_silicon/rtl/cim_mac_controller.v`); the **analog** compute macro remains a behavioral model (see [Tape-Out](#-physical-tape-out-interface-feasibility-vehicle)).
 
 ### 1. The MLIR Heterogeneous Router
 You cannot run every neural-network layer on analog hardware. Transformers need high precision for Attention but tolerate noise in Feed-Forward layers. The simulated compiler (`simulator/compiler/heterogeneous_router.py`) routes sub-layers by their numerical requirements.
@@ -87,9 +88,11 @@ Below is the simulated **Spatial Physics Heatmap** showing modeled Voltage IR Dr
 The design was taken through the industry-standard **SkyWater 130nm** node using the **OpenLane** EDA toolchain. OpenLane completed the full flow and produced a clean GDSII.
 
 > [!IMPORTANT]
-> **What was hardened:** the Efabless Caravel `user_project_wrapper` and its digital Wishbone interface (`open_silicon/rtl/`). This is a **feasibility / PDN-stress vehicle**, not the CIM accelerator itself. Because the IR-drop simulation showed center-voltage sag is catastrophic for analog CIM, the floorplan (`config.json`) **over-provisions the Power Delivery Network as a forward-looking countermeasure** for the analog macro that will occupy the reserved area. The analog compute macro is currently a behavioral/SPICE model and is tied off in the synthesizable RTL.
+> **What was hardened:** the Efabless Caravel `user_project_wrapper` and its digital Wishbone interface. This is a **feasibility / PDN-stress vehicle**. Because the IR-drop simulation showed center-voltage sag is catastrophic for analog CIM, the floorplan (`config.json`) **over-provisions the Power Delivery Network as a forward-looking countermeasure** for the analog macro that will occupy the reserved area.
+>
+> **The RTL has since been upgraded** to a real, simulation-verified 8×8 INT8 systolic MAC tile (`cim_mac_controller.v`). The signoff metrics below still reflect the **earlier interface-stub harden** — re-running OpenLane on the new MAC RTL (Linux/WSL) is pending. The analog compute macro remains a behavioral/SPICE model.
 
-### 🏁 Signoff Metrics *(verified — from `metrics.csv` & signoff reports)*
+### 🏁 Signoff Metrics *(verified — from `metrics.csv`; reflects the prior interface-stub harden)*
 
 | Metric | Result |
 | :--- | :--- |
@@ -108,7 +111,7 @@ The design was taken through the industry-standard **SkyWater 130nm** node using
 | **Worst Setup Slack** | `+1.33 ns` @ 100 MHz (10 ns period) |
 | **Worst Hold Slack** | `+0.25 ns` |
 
-> **Reading the cell count honestly:** of the 2,903,614 cells in the GDS, only **244 are synthesized logic** — the Wishbone interface. The remaining ~2.9M are **decoupling-capacitor, well-tap, and fill cells** that OpenLane places to satisfy density and PDN rules across a deliberately oversized, 1.8%-utilized die. The big number reflects *die population*, not design complexity. Writing the synthesizable CIM compute datapath (so logic-cell count reflects real MACs) is the explicit next milestone.
+> **Reading the cell count honestly:** of the 2,903,614 cells in the GDS, only **244 are synthesized logic** — the Wishbone interface stub that was hardened. The remaining ~2.9M are **decoupling-capacitor, well-tap, and fill cells** that OpenLane places to satisfy density and PDN rules across a deliberately oversized, 1.8%-utilized die. The big number reflects *die population*, not design complexity. The synthesizable CIM compute datapath now exists (the 8×8 INT8 systolic MAC, sim-verified); re-hardening it will lift the logic-cell count from 244 into the tens of thousands.
 
 The layout is geometrically compliant with SkyWater 130nm rules and passes all signoff checks for the interface vehicle.
 
@@ -147,6 +150,13 @@ python simulator/math_engine/analog_thermal_drift.py
 
 # Train the AI calibrators (needs: numpy, scikit-learn, torch)
 python simulator/ai_optimizer/train_neural_calibrator.py
+```
+
+**Verify the digital CIM MAC tile (needs iverilog):**
+```bash
+iverilog -g2012 -o tb_cim_mac.vvp \
+    open_silicon/rtl/cim_mac_controller.v open_silicon/verif/tb_cim_mac.v
+vvp tb_cim_mac.vvp        # -> [TB] 512 checks, 0 errors / RESULT: PASS
 ```
 
 **Reproduce the physical layout (optional, heavy):**

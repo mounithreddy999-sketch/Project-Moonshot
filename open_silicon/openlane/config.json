@@ -2,7 +2,7 @@
     "DESIGN_NAME": "user_project_wrapper",
     "VERILOG_FILES": [
         "dir::../rtl/user_project_wrapper.v",
-        "dir::../rtl/analog_cim_controller.v"
+        "dir::../rtl/cim_mac_controller.v"
     ],
     "CLOCK_PORT": "wb_clk_i",
     "CLOCK_PERIOD": 10.0,

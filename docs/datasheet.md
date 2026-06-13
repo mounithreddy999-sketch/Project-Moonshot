@@ -2,7 +2,7 @@
 
 **Heterogeneous Compute-in-Memory (CIM) Accelerator for Datacenter LLM Inference**
 
-> **Status note:** This datasheet describes the **target architecture**, characterized in a Python physics-simulation framework. Sections marked *Simulated* are software results, not silicon measurements. The physical artifact in this repo is a SkyWater 130nm tape-out of the digital Caravel interface (see `docs/tapeout_report.md`); the analog CIM compute macro is a behavioral model and the synthesizable compute datapath is future work.
+> **Status note:** This datasheet describes the **target architecture**, characterized in a Python physics-simulation framework. Sections marked *Simulated* are software results, not silicon measurements. The physical artifact in this repo is a SkyWater 130nm tape-out of the digital Caravel interface (see `docs/tapeout_report.md`). The **digital** CIM compute datapath is now implemented and simulation-verified RTL (`cim_mac_controller.v`, re-harden pending); the **analog** CIM macro remains a behavioral model.
 
 ## 1. General Description
 Project Moonshot is a heterogeneous Network-on-Package (NoP) accelerator architecture designed to overcome the "Memory Wall" in Trillion-Parameter LLM inference. It uses a $2 \times 2$ Universal Chiplet Interconnect Express (UCIe) mesh to route neural-network sub-layers:
@@ -43,7 +43,7 @@ The architecture features a compiler optimization pass that uses Polynomial Regr
 | `wbs_ack_o` | Output | 1 | Wishbone Acknowledge |
 | `analog_io` | In/Out | 8 | Direct Analog GPIO access (reserved for the future analog macro) |
 
-> The current `analog_cim_controller.v` implements the Wishbone handshake (244 synthesized cells); the CIM compute datapath behind this interface is not yet synthesizable RTL.
+> The CIM compute datapath is now synthesizable, simulation-verified RTL: `cim_mac_controller.v`, an 8×8 INT8 systolic MAC array (64 PEs computing C = A×B), verified with iverilog (512 checks, 0 errors). Re-hardening it to GDS via the Linux/WSL OpenLane flow is the remaining step.
 
 ## 5. Physical Floorplan Countermeasures — *implemented in `config.json`*
 The IR-drop simulation showed center-voltage sag causes catastrophic MSE in analog CIM, so the floorplan over-provisions the Power Delivery Network (PDN) as a forward-looking countermeasure for the analog macro.
