@@ -1,13 +1,13 @@
 <div align="center">
 
 # 🚀 Project Moonshot
-### Heterogeneous Compute-in-Memory (CIM) ASIC: From Python Simulation to SkyWater 130nm Physical Silicon
+### Heterogeneous Compute-in-Memory (CIM): An Analog-CIM Simulation Framework + a SkyWater 130nm Interface Feasibility Tape-Out
 
-![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)
-![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen)
-![Foundry](https://img.shields.io/badge/TapeOut-SkyWater_130nm-blue)
+![Status](https://img.shields.io/badge/Simulation-Runnable-brightgreen)
+![Foundry](https://img.shields.io/badge/Process-SkyWater_130nm-blue)
+![TapeOut](https://img.shields.io/badge/TapeOut-Caravel_Wrapper_(feasibility)-blue)
+![Signoff](https://img.shields.io/badge/LVS%2FDRC%2FAntenna-0_Violations-brightgreen)
 ![Architecture](https://img.shields.io/badge/Architecture-Heterogeneous_CIM-orange)
-![Verification](https://img.shields.io/badge/LVS%2FDRC-0_Violations-brightgreen)
 
 <img src="docs/assets/chip_hero.png" width="600px" alt="Project Moonshot Hero">
 
@@ -15,22 +15,35 @@
 
 ---
 
-## 🧭 The Vision & The Problem
+## ✅ Project Status — What's Real Today
 
-The Trillion-Parameter LLM era is choked by the **"Memory Wall"**—the massive energy cost of moving data between High Bandwidth Memory (HBM) and the GPU compute cores. Moving data takes 100x more energy than performing the math itself. 
+This repo is honest about the line between *simulated/designed* and *physically realized*. Read this table first; every silicon number below is traceable to `open_silicon/openlane/runs/moonshot_physical_build/reports/metrics.csv`.
 
-**Project Moonshot** is an end-to-end, open-source architectural framework that solves this by moving the compute directly *inside* the memory array using **Analog Compute-in-Memory (ACIM)**. However, because analog physics are chaotic (voltage drops, thermal drift), we engineered a **Hardware-Software Co-Design** framework that uses AI to dynamically calibrate the hardware.
-
-This repository chronicles the entire journey from abstract Python MLIR routing, to Scikit-Learn thermal calibration, all the way to a perfectly verified, 2.9-million-cell physical GDSII tape-out layout.
+| Layer | Status | What exists |
+| :--- | :--- | :--- |
+| **Analog-CIM physics + AI calibration simulation** | ✅ **Runnable** | Python physics engines + sklearn/PyTorch calibrators. Reproduces thermal-drift failure and adaptive recovery (run it yourself — see below). |
+| **Heterogeneous chiplet compiler / roofline / safety eval** | ✅ **Runnable** | Coherent Python models of the 2×2 mesh router, roofline bounds, and an AI red-team gate. |
+| **Physical tape-out of the Caravel wrapper** | ✅ **Clean GDS** | OpenLane really ran and produced a DRC/LVS-clean GDSII of the `user_project_wrapper` interface. |
+| **Synthesizable CIM *compute* datapath** | ⏳ **Next milestone** | The hardened RTL is currently a Wishbone interface stub (244 logic cells). The MAC/crossbar compute path is modeled in software but not yet synthesizable RTL. |
 
 ---
 
-## 🏛️ System Architecture
+## 🧭 The Vision & The Problem
 
-Project Moonshot abandons monolithic SoCs in favor of a **Heterogeneous 2x2 Chiplet Mesh Network**.
+The Trillion-Parameter LLM era is choked by the **"Memory Wall"** — moving data between High Bandwidth Memory (HBM) and the GPU compute cores costs ~100× more energy than the math itself.
+
+**Project Moonshot** explores an end-to-end, open-source architectural framework that attacks this by moving compute *inside* the memory array using **Analog Compute-in-Memory (ACIM)**. Because analog physics are chaotic (voltage drops, thermal drift), the framework pairs the hardware with a **Hardware-Software Co-Design** loop that uses AI to dynamically calibrate around the physics.
+
+The repository chronicles the journey from Python MLIR-style routing, to Scikit-Learn thermal calibration, to a DRC/LVS-clean GDSII layout of the chip's Caravel interface — and is explicit about which stages are simulated versus fabricated.
+
+---
+
+## 🏛️ System Architecture *(target architecture — modeled end-to-end in software)*
+
+> The diagrams below describe the **target** heterogeneous architecture. It is fully modeled in the Python simulation stack (`simulator/`). The physical tape-out in this repo hardens the digital Caravel interface to that architecture; the analog compute macro is a behavioral model (see [Tape-Out](#-physical-tape-out-interface-feasibility-vehicle)).
 
 ### 1. The MLIR Heterogeneous Router
-You cannot run every neural network layer on Analog hardware. Transformers require perfect precision for Attention, but can afford slight noise in Feed-Forward layers. Our custom compiler intercepts PyTorch graphs and routes them based on mathematical requirements.
+You cannot run every neural-network layer on analog hardware. Transformers need high precision for Attention but tolerate noise in Feed-Forward layers. The simulated compiler (`simulator/compiler/heterogeneous_router.py`) routes sub-layers by their numerical requirements.
 
 ```mermaid
 graph TD
@@ -44,9 +57,7 @@ graph TD
 ```
 
 ### 2. The Hardware-Software Co-Design Loop
-Analog hardware historically fails in Data Centers because analog voltage drifts with heat. Instead of fixing the hardware with massive, expensive capacitors, **we fixed the hardware using software.**
-
-We trained a lightweight **Scikit-Learn Polynomial Regression** model on the physical failure patterns. By injecting this calibrator into the compiler pass, we mathematically map the chaotic thermal drift back to reality, dropping the Mean Squared Error (MSE) from `0.63` down to `0.12`.
+Analog hardware drifts with heat. Instead of fixing that with massive capacitors, the framework **fixes it in software**: a lightweight **Scikit-Learn Polynomial Regression** (and a PyTorch DNN variant) is trained on simulated physical failure patterns and injected as a compiler pass to map chaotic thermal drift back toward the ideal result.
 
 ```mermaid
 graph LR
@@ -54,14 +65,16 @@ graph LR
     B -->|Bends weights to counter physics| C[DAC Array]
     C --> D[Physical Analog Crossbar]
     D -->|Thermal Noise / IR Drop applied naturally| E[ADC Array]
-    E --> F[Perfect Output Recovered!]
-    
+    E --> F[Output Recovered]
+
     style B fill:#f9f,stroke:#333,stroke-width:2px
     style D fill:#f66,stroke:#333,stroke-width:2px
 ```
 
+**Measured in simulation (`simulator/`, 10,000 samples):** static calibration (profiled once at T=0) degrades catastrophically as temperature rises (MSE → ~183 at 2.5× drift), while *adaptive* re-profiling holds MSE ~0.1. The headline `0.63 → 0.12 MSE` improvement is a **Python physics-simulation result**, not a silicon measurement.
+
 ### 3. The Physical Physics (Why Calibration is Needed)
-Below is the simulated **Spatial Physics Heatmap** demonstrating the physical Voltage IR Drop and Thermal Drift across our analog macro before software calibration.
+Below is the simulated **Spatial Physics Heatmap** showing modeled Voltage IR Drop and Thermal Drift across the analog macro before software calibration.
 
 <div align="center">
   <img src="docs/assets/spatial_heatmap.png" width="500px" alt="Spatial Physics Heatmap">
@@ -69,29 +82,35 @@ Below is the simulated **Spatial Physics Heatmap** demonstrating the physical Vo
 
 ---
 
-## 🛠️ Physical Tape-Out Execution
+## 🛠️ Physical Tape-Out: Interface Feasibility Vehicle
 
-We transitioned from Python math simulation into industry-standard physical hardware using the **SkyWater 130nm process node** and the **OpenLane EDA toolchain**.
+The design was taken through the industry-standard **SkyWater 130nm** node using the **OpenLane** EDA toolchain. OpenLane completed the full flow and produced a clean GDSII.
 
 > [!IMPORTANT]
-> **Hardware-Software Co-Design:** Because our Python math engine proved that physical IR drop destroys Analog precision, we hardcoded physical countermeasures directly into the RTL floorplan. We commanded the OpenLane routing engine to surround our Analog macros with an exceptionally dense, over-provisioned Power Delivery Network (PDN) to physically combat the simulated math errors!
+> **What was hardened:** the Efabless Caravel `user_project_wrapper` and its digital Wishbone interface (`open_silicon/rtl/`). This is a **feasibility / PDN-stress vehicle**, not the CIM accelerator itself. Because the IR-drop simulation showed center-voltage sag is catastrophic for analog CIM, the floorplan (`config.json`) **over-provisions the Power Delivery Network as a forward-looking countermeasure** for the analog macro that will occupy the reserved area. The analog compute macro is currently a behavioral/SPICE model and is tied off in the synthesizable RTL.
 
-### 🏆 Final Tape-Out Metrics (Project Completion)
-The OpenLane EDA pipeline successfully synthesized, placed, and routed the design into a physical `.gds` mask file.
+### 🏁 Signoff Metrics *(verified — from `metrics.csv` & signoff reports)*
 
 | Metric | Result |
 | :--- | :--- |
-| **Total Standard Cells** | `2,903,614` |
-| **Die Area** | `10.27 mm²` |
-| **Total Routing Wire Length** | `46,613 microns` |
-| **Peak RAM Usage (Extraction)** | `10.14 GB` |
-| **Setup/Hold Violations** | `0` |
-| **LVS Errors (Layout vs Schematic)** | `0` |
-| **Magic DRC Violations (Geometry)**| `0` |
-| **KLayout DRC Violations** | `0` |
-| **Critical Path Delay** | `2.37 ns` (Easily hits 100MHz) |
+| **Design hardened** | Caravel `user_project_wrapper` (Wishbone interface) |
+| **Synthesized logic cells** | `244` |
+| **Die population (decap + welltap + fill)** | `2,903,370` cells |
+| **Total cells in GDS** | `2,903,614` |
+| **Logic utilization** | `1.8%` *(intentional — empty area reserved for the analog macro and used to stress the PDN)* |
+| **Die Area** | `10.28 mm²` (2920 × 3520 µm) |
+| **Total Routing Wire Length** | `46,613 µm` |
+| **Total Vias** | `983` |
+| **LVS Errors** | `0` *(no net/device/pin/property mismatches)* |
+| **Magic DRC Violations** | `0` |
+| **Antenna Violations** | `0` |
+| **WNS / TNS** | `0.0 / 0.0 ns` |
+| **Worst Setup Slack** | `+1.33 ns` @ 100 MHz (10 ns period) |
+| **Worst Hold Slack** | `+0.25 ns` |
 
-The chip successfully passed all Signoff verification. The geometry is physically compliant with SkyWater 130nm photolithography rules and is ready for Multi-Project Wafer (MPW) fabrication.
+> **Reading the cell count honestly:** of the 2,903,614 cells in the GDS, only **244 are synthesized logic** — the Wishbone interface. The remaining ~2.9M are **decoupling-capacitor, well-tap, and fill cells** that OpenLane places to satisfy density and PDN rules across a deliberately oversized, 1.8%-utilized die. The big number reflects *die population*, not design complexity. Writing the synthesizable CIM compute datapath (so logic-cell count reflects real MACs) is the explicit next milestone.
+
+The layout is geometrically compliant with SkyWater 130nm rules and passes all signoff checks for the interface vehicle.
 
 <div align="center">
   <img src="docs/assets/gdsii_layout.png" width="600px" alt="Physical GDSII Layout">
@@ -103,35 +122,41 @@ The chip successfully passed all Signoff verification. The geometry is physicall
 
 ```text
 Project-Moonshot/
-├── docs/                   # Master Hardware Specifications, Assets & Datasheets
-├── open_silicon/           # The Physical Tape-Out Logic
-│   ├── openlane/           # Physical Floorplan (config.json)
-│   ├── rtl/                # The Verilog implementation (user_project_wrapper.v)
-│   └── verif/              # Digital/Analog Testbenches (Verilog/SPICE)
-├── simulator/              # The AI Hardware Simulation Stack
-│   ├── ai_optimizer/       # Scikit-Learn Calibrator (Fixes thermal drift)
-│   ├── api/                # Apache Kafka streaming telemetry integration
-│   ├── compiler/           # Heterogeneous Chiplet Layer router
-│   ├── math_engine/        # The analog physics dynamics simulators
-│   └── roofline.py         # Advanced Packaging roofline bound simulations
-├── evaluator/              # Hardware Red-Teaming and AI Safety Bounds
-├── setup_tapeout.sh        # One-Click SkyWater PDK downloader
+├── docs/                   # Specs, datasheet, assets, and the signoff report
+├── open_silicon/           # Physical tape-out logic
+│   ├── openlane/           # Floorplan (config.json) + the real OpenLane run
+│   ├── rtl/                # Verilog (user_project_wrapper.v — interface stub today)
+│   └── verif/              # Digital/Analog testbenches (Verilog/SPICE)
+├── simulator/              # The AI hardware simulation stack (runnable)
+│   ├── ai_optimizer/       # Scikit-Learn / PyTorch thermal-drift calibrators
+│   ├── api/                # Kafka streaming telemetry integration
+│   ├── compiler/           # Heterogeneous chiplet-layer router
+│   ├── math_engine/        # Analog physics dynamics simulators
+│   └── roofline_simulator.py
+├── evaluator/              # AI red-team / safety gate (moonshot_eval.py)
+├── setup_tapeout.sh        # SkyWater PDK downloader
 └── README.md               # This file
 ```
 
-## 🚀 Getting Started (Simulate the Build)
+## 🚀 Getting Started
 
-1. **Download the Foundry Blueprints:**
-You must pull the ~5GB of Open-Source SkyWater PDKs:
+**Run the simulation stack (no PDK required):**
 ```bash
-bash setup_tapeout.sh
+# Reproduce the thermal-drift failure vs. adaptive-recovery result
+python simulator/math_engine/analog_thermal_drift.py
+
+# Train the AI calibrators (needs: numpy, scikit-learn, torch)
+python simulator/ai_optimizer/train_neural_calibrator.py
 ```
 
-2. **Synthesize the GDSII Image:**
-Trigger the physical layout engine (requires 16GB RAM/SWAP allocation in Docker/WSL):
+**Reproduce the physical layout (optional, heavy):**
 ```bash
-cd open_silicon
-make harden
+# 1. Download the ~5GB SkyWater PDKs
+bash setup_tapeout.sh
+
+# 2. Harden the interface vehicle (requires OpenLane in Linux/Docker/WSL;
+#    16GB+ RAM/SWAP). The Windows-native flow does not complete GDS signoff.
+cd open_silicon && make harden
 ```
 
 ---
