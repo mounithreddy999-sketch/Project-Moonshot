@@ -8,14 +8,19 @@
 // 0xDEADBEEF interface stub so the synthesized logic reflects real compute
 // (64 multiply-accumulate processing elements).
 //
+// PIPELINING (for 100 MHz / 10 ns closure on Sky130 130nm): a single-cycle
+// 8x8 multiply + 32b accumulate is ~19 ns. We pipeline into stages:
+//   (1) registered edge feeds  -> takes the input mux out of the multiply path
+//   (2) registered product     -> isolates the multiply from the accumulate
+//   (3) accumulate
+// Operands still march one PE/cycle (the propagation registers ARE the systolic
+// skew). Because accumulators are cleared once at start and add the registered
+// product every cycle (out-of-window products are 0), the exact pipeline
+// latency does not affect the result -- only RUN_CYCLES must cover it.
+//
 // NOTE: This is the *digital* CIM datapath. The analog charge-domain crossbar
 // remains a behavioral/SPICE model (open_silicon/verif/analog_macro.spice) and
 // is future hard-macro work; it cannot be expressed in synthesizable RTL.
-//
-// Dataflow: activations A march west->east, weights B march north->south, one
-// hop per cycle. Row i is fed into the west edge skewed by i cycles; column j
-// is fed into the north edge skewed by j cycles, so the k-th operands meet at
-// PE[i][j] on cycle (i+j+k) and acc = sum_k A[i][k]*B[k][j].
 //
 // Wishbone register map (32-bit words):
 //   0x000 CTRL   (W)  bit0 = start compute
@@ -25,31 +30,34 @@
 //   0x400..0x4FC C    (R)  64 result words; word (i*8+j) = C[i][j]
 
 // ---------------------------------------------------------------------------
-// Processing element
+// Processing element (2-stage: registered product, then accumulate)
 // ---------------------------------------------------------------------------
 module cim_pe (
     input  wire               clk,
     input  wire               rst,
-    input  wire               clr_acc,  // load first product (start of run)
-    input  wire               en,       // accumulate subsequent products
+    input  wire               clr_acc,  // clear accumulator (start of run)
+    input  wire               en,       // accumulate registered product
     input  wire signed [7:0]  a_in,
     input  wire signed [7:0]  b_in,
     output reg  signed [7:0]  a_out,
     output reg  signed [7:0]  b_out,
     output reg  signed [31:0] acc
 );
+    reg signed [15:0] prod;   // pipeline reg: product of this cycle's operands
     always @(posedge clk) begin
         if (rst) begin
             a_out <= 8'sd0;
             b_out <= 8'sd0;
+            prod  <= 16'sd0;
             acc   <= 32'sd0;
         end else begin
-            a_out <= a_in;
-            b_out <= b_in;
+            a_out <= a_in;            // systolic operand propagation (east)
+            b_out <= b_in;            // systolic operand propagation (south)
+            prod  <= a_in * b_in;     // stage 1: registered signed product
             if (clr_acc)
-                acc <= a_in * b_in;          // signed 8x8 -> sign-extended
+                acc <= 32'sd0;        // clear once at start of run
             else if (en)
-                acc <= acc + (a_in * b_in);
+                acc <= acc + prod;    // stage 2: accumulate registered product
         end
     end
 endmodule
@@ -117,7 +125,9 @@ module cim_mac_controller #(
     output reg         wb_ack,
     inout  wire [7:0]  analog_io   // reserved for future analog macro; unused
 );
-    localparam [5:0] RUN_CYCLES = 6'd24;  // > worst-case latency (i+j+k = 21)
+    // Worst-case product lands at cycle (i+j+k)=21, plus feed-reg (+1) and
+    // product-reg (+1) pipeline latency -> ~23; RUN_CYCLES adds margin.
+    localparam [5:0] RUN_CYCLES = 6'd31;
     localparam S_IDLE = 1'b0, S_RUN = 1'b1;
 
     reg signed [7:0] a_mem [0:N*N-1];
@@ -132,7 +142,7 @@ module cim_mac_controller #(
     wire clr_acc = (state == S_RUN) && (t == 6'd0);
     wire en      = (state == S_RUN) && (t != 6'd0);
 
-    // --- skewed edge feeds (combinational) ---
+    // --- skewed edge feeds (combinational select from operand memories) ---
     reg signed [7:0] a_west_arr  [0:N-1];
     reg signed [7:0] b_north_arr [0:N-1];
     integer k;
@@ -148,13 +158,31 @@ module cim_mac_controller #(
         end
     end
 
+    // --- pipeline stage: register the edge feeds (mux out of multiply path) ---
+    reg signed [7:0] a_west_q  [0:N-1];
+    reg signed [7:0] b_north_q [0:N-1];
+    integer kq;
+    always @(posedge clk) begin
+        if (rst) begin
+            for (kq = 0; kq < N; kq = kq + 1) begin
+                a_west_q[kq]  <= 8'sd0;
+                b_north_q[kq] <= 8'sd0;
+            end
+        end else begin
+            for (kq = 0; kq < N; kq = kq + 1) begin
+                a_west_q[kq]  <= a_west_arr[kq];
+                b_north_q[kq] <= b_north_arr[kq];
+            end
+        end
+    end
+
     wire [N*8-1:0] a_west_flat;
     wire [N*8-1:0] b_north_flat;
     genvar gi;
     generate
         for (gi = 0; gi < N; gi = gi + 1) begin : g_pack
-            assign a_west_flat[gi*8 +: 8]  = a_west_arr[gi];
-            assign b_north_flat[gi*8 +: 8] = b_north_arr[gi];
+            assign a_west_flat[gi*8 +: 8]  = a_west_q[gi];
+            assign b_north_flat[gi*8 +: 8] = b_north_q[gi];
         end
     endgenerate
 

@@ -1,0 +1,19 @@
+{
+    "DESIGN_NAME": "cim_mac_controller",
+    "VERILOG_FILES": ["dir::../rtl/cim_mac_controller.v"],
+    "CLOCK_PORT": "clk",
+    "CLOCK_PERIOD": 10.0,
+
+    "//": "Standalone harden of the digital CIM MAC tile, right-sized (relative)",
+    "//": "so utilization and cell counts reflect REAL compute. Pipelined RTL",
+    "//": "targets 100 MHz; antenna repair enabled to clear violations.",
+    "FP_SIZING": "relative",
+    "FP_CORE_UTIL": 40,
+    "PL_TARGET_DENSITY": 0.45,
+
+    "GRT_REPAIR_ANTENNAS": 1,
+    "RUN_HEURISTIC_DIODE_INSERTION": 1,
+    "DIODE_ON_PORTS": "in",
+
+    "ROUTING_CORES": 8
+}

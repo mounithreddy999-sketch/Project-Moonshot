@@ -18,7 +18,7 @@ volare/
 # Anchored to root so it does NOT match open_silicon/openlane/ (Windows git is
 # case-insensitive, so an unanchored "OpenLane/" would swallow it).
 /OpenLane/
-open_silicon/openlane/runs/
+open_silicon/*/runs/
 
 # --- OS / editor cruft ---
 .DS_Store

@@ -24,8 +24,8 @@ This repo is honest about the line between *simulated/designed* and *physically 
 | **Analog-CIM physics + AI calibration simulation** | ✅ **Runnable** | Python physics engines + sklearn/PyTorch calibrators. Reproduces thermal-drift failure and adaptive recovery (run it yourself — see below). |
 | **Heterogeneous chiplet compiler / roofline / safety eval** | ✅ **Runnable** | Coherent Python models of the 2×2 mesh router, roofline bounds, and an AI red-team gate. |
 | **Physical tape-out of the Caravel wrapper** | ✅ **Clean GDS** | OpenLane really ran and produced a DRC/LVS-clean GDSII of the `user_project_wrapper` interface. |
-| **Synthesizable CIM *compute* datapath** | ✅ **RTL-complete & sim-verified** | `cim_mac_controller.v` — an 8×8 INT8 **systolic MAC array** (64 PEs, `C = A×B`) on the Wishbone bus. Verified with iverilog: **512 checks, 0 errors**. Re-hardening it to GDS (Linux/WSL OpenLane) is the remaining step. |
-| **Physical re-harden of the MAC tile** | ⏳ **Next milestone** | The GDS/metrics in this repo still reflect the *earlier* interface stub. Re-running OpenLane on the new MAC RTL will lift `synth_cell_count` from 244 into the tens of thousands. |
+| **Synthesizable CIM *compute* datapath** | ✅ **RTL-complete, sim-verified & hardened** | `cim_mac_controller.v` — a pipelined 8×8 INT8 **systolic MAC array** (64 PEs, `C = A×B`) on the Wishbone bus. Verified with iverilog: **512 checks, 0 errors**, and hardened standalone on Sky130 (metrics below). |
+| **Physical re-harden of the MAC tile** | ✅ **Hardened (standalone)** | **53,120 synth cells**, 1.36 mm² @ 44.8% util, DRC/LVS-clean, **100 MHz** at the typical corner. See [Standalone MAC Tile](#-standalone-mac-tile--re-hardened-real-compute). |
 
 ---
 
@@ -111,7 +111,7 @@ The design was taken through the industry-standard **SkyWater 130nm** node using
 | **Worst Setup Slack** | `+1.33 ns` @ 100 MHz (10 ns period) |
 | **Worst Hold Slack** | `+0.25 ns` |
 
-> **Reading the cell count honestly:** of the 2,903,614 cells in the GDS, only **244 are synthesized logic** — the Wishbone interface stub that was hardened. The remaining ~2.9M are **decoupling-capacitor, well-tap, and fill cells** that OpenLane places to satisfy density and PDN rules across a deliberately oversized, 1.8%-utilized die. The big number reflects *die population*, not design complexity. The synthesizable CIM compute datapath now exists (the 8×8 INT8 systolic MAC, sim-verified); re-hardening it will lift the logic-cell count from 244 into the tens of thousands.
+> **Reading the cell count honestly:** of the 2,903,614 cells in the GDS, only **244 are synthesized logic** — the Wishbone interface stub that was hardened. The remaining ~2.9M are **decoupling-capacitor, well-tap, and fill cells** that OpenLane places to satisfy density and PDN rules across a deliberately oversized, 1.8%-utilized die. The big number reflects *die population*, not design complexity. The synthesizable CIM compute datapath now exists and has been hardened standalone — **53,120 logic cells** at honest 44.8% utilization (see [Standalone MAC Tile](#-standalone-mac-tile--re-hardened-real-compute) below).
 
 The layout is geometrically compliant with SkyWater 130nm rules and passes all signoff checks for the interface vehicle.
 
@@ -120,6 +120,22 @@ The layout is geometrically compliant with SkyWater 130nm rules and passes all s
 </div>
 
 ---
+
+### 🔬 Standalone MAC Tile — Re-Hardened (real compute)
+
+The digital MAC tile (`cim_mac_controller`) was hardened on its **own right-sized die** (not the fixed Caravel area), so these numbers describe real compute — not mandatory fill. Config: `open_silicon/openlane_mac/`.
+
+| Metric | Result |
+| :--- | :--- |
+| **Synthesized logic cells** | `53,120` *(vs 244 for the interface stub)* |
+| Die area / utilization | `1.36 mm²` @ `44.8%` |
+| **Magic / KLayout DRC** | `0 / 0` ✅ |
+| **LVS errors** | `0` ✅ |
+| **Timing @ 100 MHz** | meets the **typical** corner (0 setup/hold violations); slow-corner WNS `−1.92 ns` (~84 MHz worst-case) |
+| Antenna violations | `39` (20 pin + 19 net) — cut from 454 by diode insertion |
+| Routing wire / vias | `2,606,323 µm` / `482,098` |
+
+> Pipelining each PE (registered edge-feeds + registered product) raised typical-corner closure from **~51 MHz** (single-cycle MAC) to **100 MHz**. Known remaining signoff items: slow-corner timing (~84 MHz), 39 residual antenna violations, and minor max-slew/fanout warnings. The Caravel-integrated re-harden (MAC inside `user_project_wrapper`) is separate future work.
 
 ## 🗂️ Repository Structure
 

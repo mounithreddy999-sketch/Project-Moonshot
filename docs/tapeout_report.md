@@ -35,5 +35,20 @@ Physical verification and synthesis metrics from the SkyWater 130nm OpenLane EDA
 
 > Power is sub-µW because the hardened logic is a 244-cell interface, not a compute workload. These numbers will rise substantially once the synthesizable CIM datapath replaces the interface stub.
 
+## 🔬 Standalone MAC Tile Re-Harden *(real compute — config `open_silicon/openlane_mac/`)*
+
+The interface stub has since been replaced by a real compute datapath: a **pipelined 8×8 INT8 systolic MAC array** (`cim_mac_controller`, 64 PEs computing C = A×B). It was hardened on its own right-sized die so the metrics reflect compute, not Caravel fill.
+
+* **Synthesized logic cells:** `53,120`  *(vs 244 for the stub)*
+* **Die Area / Utilization:** `1.36 mm²` @ `44.8%`
+* **Magic DRC / KLayout DRC:** `0 / 0`
+* **LVS errors:** `0`
+* **Timing @ 100 MHz (10 ns):** meets the **typical** corner — 0 setup and 0 hold violations. Worst (slow) corner WNS `−1.92 ns` (~84 MHz). Pipelining the PE (registered feeds + product) improved typical-corner closure from ~51 MHz (single-cycle MAC) to 100 MHz.
+* **Antenna violations:** `39` (20 pin + 19 net), reduced from 454 by heuristic diode insertion.
+* **Routing wire length / vias:** `2,606,323 µm` / `482,098`
+* **Functional verification:** iverilog testbench `open_silicon/verif/tb_cim_mac.v` — 512 checks, 0 errors (identity, ±saturation, 5 random signed matrices).
+
+> **Known remaining signoff items:** slow-corner timing (~84 MHz), 39 residual antenna violations, and minor max-slew/fanout warnings — all addressable with further pipelining / buffering / manual diode insertion.
+
 ## 🧬 Conclusion
-The Caravel interface vehicle was successfully hardened on the SkyWater 130nm process node and passes all signoff checks (LVS / Magic DRC / antenna = 0) with positive timing slack. The geometry is compliant with SkyWater 130nm photolithography rules, and the over-provisioned PDN is in place as a forward-looking countermeasure for the analog macro that will occupy the reserved die area. The next milestone is replacing the interface stub with a synthesizable CIM compute datapath so the logic-cell count reflects real MACs.
+Two artifacts exist: (1) the **Caravel interface vehicle** (`user_project_wrapper`, the fixed Caravel die) — DRC/LVS-clean, demonstrating the integration flow and PDN strategy; and (2) the **standalone MAC tile** above — a real 53,120-cell INT8 systolic GEMM, DRC/LVS-clean and meeting 100 MHz at the typical corner. The next milestone is hardening the MAC *inside* the Caravel wrapper for a single integrated tape-out.
