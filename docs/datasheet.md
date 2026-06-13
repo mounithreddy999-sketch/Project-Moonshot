@@ -2,7 +2,7 @@
 
 **Heterogeneous Compute-in-Memory (CIM) Accelerator for Datacenter LLM Inference**
 
-> **Status note:** This datasheet describes the **target architecture**, characterized in a Python physics-simulation framework. Sections marked *Simulated* are software results, not silicon measurements. The physical artifact in this repo is a SkyWater 130nm tape-out of the digital Caravel interface (see `docs/tapeout_report.md`). The **digital** CIM compute datapath is implemented, simulation-verified, and hardened standalone on Sky130 (`cim_mac_controller.v` — 54,983 cells, DRC/LVS-clean, 100 MHz typical / ~95.5 MHz worst-case PVT); the **analog** CIM macro remains a behavioral model.
+> **Status note:** This datasheet describes the **target architecture**, characterized in a Python physics-simulation framework. Sections marked *Simulated* are software results, not silicon measurements. The physical artifact in this repo is a SkyWater 130nm tape-out of the digital Caravel interface (see `docs/tapeout_report.md`). The **digital** CIM compute datapath is implemented, simulation-verified, and hardened standalone on Sky130 (`cim_mac_controller.v` — 60,098 cells, DRC/LVS-clean, **100 MHz across all PVT corners**); the **analog** CIM macro remains a behavioral model.
 
 ## 1. General Description
 Project Moonshot is a heterogeneous Network-on-Package (NoP) accelerator architecture designed to overcome the "Memory Wall" in Trillion-Parameter LLM inference. It uses a $2 \times 2$ Universal Chiplet Interconnect Express (UCIe) mesh to route neural-network sub-layers:
@@ -43,7 +43,7 @@ The architecture features a compiler optimization pass that uses Polynomial Regr
 | `wbs_ack_o` | Output | 1 | Wishbone Acknowledge |
 | `analog_io` | In/Out | 8 | Direct Analog GPIO access (reserved for the future analog macro) |
 
-> The CIM compute datapath is synthesizable, simulation-verified, and hardened: `cim_mac_controller.v`, a pipelined 8×8 INT8 systolic MAC array (64 PEs, C = A×B), verified with iverilog (512 checks, 0 errors) and hardened standalone on Sky130 — **54,983 cells, 1.41 mm² @ 45.7% util, DRC/LVS-clean, meeting 100 MHz at the typical corner** (worst-case PVT ~95.5 MHz; 18 residual antenna violations).
+> The CIM compute datapath is synthesizable, simulation-verified, and hardened: `cim_mac_controller.v`, a pipelined 8×8 INT8 systolic MAC array (64 PEs, C = A×B), verified with iverilog (512 checks, 0 errors) and hardened standalone on Sky130 — **60,098 cells, 1.59 mm² @ 48.2% util, DRC/LVS-clean, meeting 100 MHz across all PVT corners** (WNS 0.0; 52 residual antenna violations).
 
 ## 5. Physical Floorplan Countermeasures — *implemented in `config.json`*
 The IR-drop simulation showed center-voltage sag causes catastrophic MSE in analog CIM, so the floorplan over-provisions the Power Delivery Network (PDN) as a forward-looking countermeasure for the analog macro.

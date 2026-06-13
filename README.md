@@ -25,7 +25,7 @@ This repo is honest about the line between *simulated/designed* and *physically 
 | **Heterogeneous chiplet compiler / roofline / safety eval** | ✅ **Runnable** | Coherent Python models of the 2×2 mesh router, roofline bounds, and an AI red-team gate. |
 | **Physical tape-out of the Caravel wrapper** | ✅ **Clean GDS** | OpenLane really ran and produced a DRC/LVS-clean GDSII of the `user_project_wrapper` interface. |
 | **Synthesizable CIM *compute* datapath** | ✅ **RTL-complete, sim-verified & hardened** | `cim_mac_controller.v` — a pipelined 8×8 INT8 **systolic MAC array** (64 PEs, `C = A×B`) on the Wishbone bus. Verified with iverilog: **512 checks, 0 errors**, and hardened standalone on Sky130 (metrics below). |
-| **Physical re-harden of the MAC tile** | ✅ **Hardened (standalone)** | **54,983 synth cells**, 1.41 mm² @ 45.7% util, DRC/LVS-clean, **100 MHz typical** (~95.5 MHz worst-case PVT). See [Standalone MAC Tile](#-standalone-mac-tile--re-hardened-real-compute). |
+| **Physical re-harden of the MAC tile** | ✅ **Hardened (standalone)** | **60,098 synth cells**, 1.59 mm² @ 48.2% util, DRC/LVS-clean, **100 MHz across all PVT corners** (WNS 0.0). See [Standalone MAC Tile](#-standalone-mac-tile--re-hardened-real-compute). |
 
 ---
 
@@ -111,7 +111,7 @@ The design was taken through the industry-standard **SkyWater 130nm** node using
 | **Worst Setup Slack** | `+1.33 ns` @ 100 MHz (10 ns period) |
 | **Worst Hold Slack** | `+0.25 ns` |
 
-> **Reading the cell count honestly:** of the 2,903,614 cells in the GDS, only **244 are synthesized logic** — the Wishbone interface stub that was hardened. The remaining ~2.9M are **decoupling-capacitor, well-tap, and fill cells** that OpenLane places to satisfy density and PDN rules across a deliberately oversized, 1.8%-utilized die. The big number reflects *die population*, not design complexity. The synthesizable CIM compute datapath now exists and has been hardened standalone — **54,983 logic cells** at honest 45.7% utilization (see [Standalone MAC Tile](#-standalone-mac-tile--re-hardened-real-compute) below).
+> **Reading the cell count honestly:** of the 2,903,614 cells in the GDS, only **244 are synthesized logic** — the Wishbone interface stub that was hardened. The remaining ~2.9M are **decoupling-capacitor, well-tap, and fill cells** that OpenLane places to satisfy density and PDN rules across a deliberately oversized, 1.8%-utilized die. The big number reflects *die population*, not design complexity. The synthesizable CIM compute datapath now exists and has been hardened standalone — **60,098 logic cells** at honest 48.2% utilization (see [Standalone MAC Tile](#-standalone-mac-tile--re-hardened-real-compute) below).
 
 The layout is geometrically compliant with SkyWater 130nm rules and passes all signoff checks for the interface vehicle.
 
@@ -127,15 +127,15 @@ The digital MAC tile (`cim_mac_controller`) was hardened on its **own right-size
 
 | Metric | Result |
 | :--- | :--- |
-| **Synthesized logic cells** | `54,983` *(vs 244 for the interface stub)* |
-| Die area / utilization | `1.41 mm²` @ `45.7%` |
+| **Synthesized logic cells** | `60,098` *(vs 244 for the interface stub)* |
+| Die area / utilization | `1.59 mm²` @ `48.2%` |
 | **Magic / KLayout DRC** | `0 / 0` ✅ |
 | **LVS errors** | `0` ✅ |
-| **Timing @ 100 MHz** | meets the **typical** corner (0 setup/hold violations); worst-case PVT WNS `−0.47 ns` (~95.5 MHz slow corner) |
-| Antenna violations | `18` (9 pin + 9 net) — cut from 454 by diode insertion |
-| Routing wire / vias | `2,761,647 µm` / `493,587` |
+| **Timing** | **100 MHz across all PVT corners** — WNS / TNS `0.0` (no setup/hold violations at any corner) |
+| Antenna violations | `52` (26 pin + 26 net) — down from 454; rose from 18 as a trade-off of the timing-driven netlist |
+| Routing wire / vias | `3,500,619 µm` / `613,353` |
 
-> Pipelining each PE — registered edge-feeds, then a **split 8×8 multiply** (two 8×4 partial products) — lifted closure from **~51 MHz** (single-cycle MAC) → ~84 MHz → **100 MHz typical / ~95.5 MHz worst-case PVT**. Remaining signoff items: the slow corner is just `−0.47 ns` short of all-corner 100 MHz, 18 residual antenna violations, and minor max-slew/fanout warnings. The Caravel-integrated re-harden (MAC inside `user_project_wrapper`) is the next milestone.
+> Pipelining each PE (registered edge-feeds → **split 8×8 multiply** into two 8×4 partial products → accumulate) plus **timing-driven synthesis** lifted closure from **~51 MHz** (single-cycle MAC) → ~84 → ~95.5 → **100 MHz at all PVT corners (WNS 0.0)**. Trade-off: the timing-driven netlist is larger (60k cells) and left 52 antenna violations (reducible with more diode passes); minor max-slew/fanout warnings remain. The Caravel-integrated re-harden (MAC inside `user_project_wrapper`) is the next milestone.
 
 ## 🗂️ Repository Structure
 

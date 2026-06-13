@@ -5,11 +5,13 @@
     "CLOCK_PERIOD": 10.0,
 
     "//": "Standalone harden of the digital CIM MAC tile, right-sized (relative).",
-    "//": "Pipelined RTL (split multiply) targets all-corner 100 MHz; antenna",
-    "//": "repair via GRT + heuristic diode insertion on all ports.",
+    "//": "Split-multiply pipelined RTL; timing-driven synthesis (DELAY) to close",
+    "//": "the slow corner; antenna repair via GRT + heuristic diodes on all ports.",
     "FP_SIZING": "relative",
     "FP_CORE_UTIL": 40,
     "PL_TARGET_DENSITY": 0.45,
+
+    "SYNTH_STRATEGY": "DELAY 0",
 
     "GRT_REPAIR_ANTENNAS": 1,
     "RUN_HEURISTIC_DIODE_INSERTION": 1,
