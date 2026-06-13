@@ -39,16 +39,16 @@ Physical verification and synthesis metrics from the SkyWater 130nm OpenLane EDA
 
 The interface stub has since been replaced by a real compute datapath: a **pipelined 8×8 INT8 systolic MAC array** (`cim_mac_controller`, 64 PEs computing C = A×B). It was hardened on its own right-sized die so the metrics reflect compute, not Caravel fill.
 
-* **Synthesized logic cells:** `53,120`  *(vs 244 for the stub)*
-* **Die Area / Utilization:** `1.36 mm²` @ `44.8%`
+* **Synthesized logic cells:** `54,983`  *(vs 244 for the stub)*
+* **Die Area / Utilization:** `1.41 mm²` @ `45.7%`
 * **Magic DRC / KLayout DRC:** `0 / 0`
 * **LVS errors:** `0`
-* **Timing @ 100 MHz (10 ns):** meets the **typical** corner — 0 setup and 0 hold violations. Worst (slow) corner WNS `−1.92 ns` (~84 MHz). Pipelining the PE (registered feeds + product) improved typical-corner closure from ~51 MHz (single-cycle MAC) to 100 MHz.
-* **Antenna violations:** `39` (20 pin + 19 net), reduced from 454 by heuristic diode insertion.
-* **Routing wire length / vias:** `2,606,323 µm` / `482,098`
+* **Timing @ 100 MHz (10 ns):** meets the **typical** corner — 0 setup and 0 hold violations. Worst (slow) corner WNS `−0.47 ns` (~95.5 MHz). Pipelining each PE (registered feeds → split 8×8 multiply into two 8×4 partial products → accumulate) lifted closure from ~51 MHz (single-cycle) → ~84 MHz → 100 MHz typical / ~95.5 MHz worst-case PVT.
+* **Antenna violations:** `18` (9 pin + 9 net), reduced from 454 by heuristic diode insertion on all ports.
+* **Routing wire length / vias:** `2,761,647 µm` / `493,587`
 * **Functional verification:** iverilog testbench `open_silicon/verif/tb_cim_mac.v` — 512 checks, 0 errors (identity, ±saturation, 5 random signed matrices).
 
-> **Known remaining signoff items:** slow-corner timing (~84 MHz), 39 residual antenna violations, and minor max-slew/fanout warnings — all addressable with further pipelining / buffering / manual diode insertion.
+> **Known remaining signoff items:** the slow corner is `−0.47 ns` short of all-corner 100 MHz, 18 residual antenna violations, and minor max-slew/fanout warnings — all addressable with one more pipeline cut / buffering / manual diode insertion.
 
 ## 🧬 Conclusion
-Two artifacts exist: (1) the **Caravel interface vehicle** (`user_project_wrapper`, the fixed Caravel die) — DRC/LVS-clean, demonstrating the integration flow and PDN strategy; and (2) the **standalone MAC tile** above — a real 53,120-cell INT8 systolic GEMM, DRC/LVS-clean and meeting 100 MHz at the typical corner. The next milestone is hardening the MAC *inside* the Caravel wrapper for a single integrated tape-out.
+Two artifacts exist: (1) the **Caravel interface vehicle** (`user_project_wrapper`, the fixed Caravel die) — DRC/LVS-clean, demonstrating the integration flow and PDN strategy; and (2) the **standalone MAC tile** above — a real 54,983-cell INT8 systolic GEMM, DRC/LVS-clean and meeting 100 MHz at the typical corner (~95.5 MHz worst-case PVT). The next milestone is hardening the MAC *inside* the Caravel wrapper for a single integrated tape-out.

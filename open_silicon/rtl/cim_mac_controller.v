@@ -8,11 +8,15 @@
 // 0xDEADBEEF interface stub so the synthesized logic reflects real compute
 // (64 multiply-accumulate processing elements).
 //
-// PIPELINING (for 100 MHz / 10 ns closure on Sky130 130nm): a single-cycle
-// 8x8 multiply + 32b accumulate is ~19 ns. We pipeline into stages:
+// PIPELINING (for all-corner 100 MHz / 10 ns closure on Sky130 130nm): a
+// single-cycle 8x8 multiply + 32b accumulate is ~19 ns, and even one product
+// register left the 8x8 multiply itself ~12 ns at the slow corner. We pipeline
+// into stages:
 //   (1) registered edge feeds  -> takes the input mux out of the multiply path
-//   (2) registered product     -> isolates the multiply from the accumulate
-//   (3) accumulate
+//   (2) split 8x8 multiply into two 8x4 partial products (registered):
+//         a*b = 16*(a*bHi) + (a*bLo),  bHi = signed b[7:4], bLo = unsigned b[3:0]
+//   (3) combine the partial products (registered)
+//   (4) accumulate
 // Operands still march one PE/cycle (the propagation registers ARE the systolic
 // skew). Because accumulators are cleared once at start and add the registered
 // product every cycle (out-of-window products are 0), the exact pipeline
@@ -43,21 +47,28 @@ module cim_pe (
     output reg  signed [7:0]  b_out,
     output reg  signed [31:0] acc
 );
-    reg signed [15:0] prod;   // pipeline reg: product of this cycle's operands
+    // Two-stage pipelined signed multiply (split b into high/low nibbles) so a
+    // full 8x8 multiply never forms the critical path at the slow corner.
+    reg signed [12:0] pH, pL;   // stage 1: partial products a*bHi (s8*s4), a*bLo (s8*u4)
+    reg signed [16:0] prod;     // stage 2: combined product a*b = 16*pH + pL
     always @(posedge clk) begin
         if (rst) begin
             a_out <= 8'sd0;
             b_out <= 8'sd0;
-            prod  <= 16'sd0;
+            pH    <= 13'sd0;
+            pL    <= 13'sd0;
+            prod  <= 17'sd0;
             acc   <= 32'sd0;
         end else begin
-            a_out <= a_in;            // systolic operand propagation (east)
-            b_out <= b_in;            // systolic operand propagation (south)
-            prod  <= a_in * b_in;     // stage 1: registered signed product
+            a_out <= a_in;                                  // systolic propagation (east)
+            b_out <= b_in;                                  // systolic propagation (south)
+            pH    <= a_in * $signed(b_in[7:4]);             // stage 1a: a * bHi  (s8 * s4)
+            pL    <= a_in * $signed({1'b0, b_in[3:0]});     // stage 1b: a * bLo  (s8 * u4)
+            prod  <= pH * 6'sd16 + pL;                      // stage 2: a*b = 16*pH + pL
             if (clr_acc)
-                acc <= 32'sd0;        // clear once at start of run
+                acc <= 32'sd0;                              // clear once at start of run
             else if (en)
-                acc <= acc + prod;    // stage 2: accumulate registered product
+                acc <= acc + prod;                          // stage 3: accumulate
         end
     end
 endmodule
@@ -125,9 +136,9 @@ module cim_mac_controller #(
     output reg         wb_ack,
     inout  wire [7:0]  analog_io   // reserved for future analog macro; unused
 );
-    // Worst-case product lands at cycle (i+j+k)=21, plus feed-reg (+1) and
-    // product-reg (+1) pipeline latency -> ~23; RUN_CYCLES adds margin.
-    localparam [5:0] RUN_CYCLES = 6'd31;
+    // Worst-case product lands at cycle (i+j+k)=21, plus feed-reg (+1) and the
+    // 2-stage multiply pipeline (+2) -> ~24; RUN_CYCLES adds margin.
+    localparam [5:0] RUN_CYCLES = 6'd36;
     localparam S_IDLE = 1'b0, S_RUN = 1'b1;
 
     reg signed [7:0] a_mem [0:N*N-1];
