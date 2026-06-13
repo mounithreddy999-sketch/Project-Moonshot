@@ -6,18 +6,17 @@
     ],
     "CLOCK_PORT": "wb_clk_i",
     "CLOCK_PERIOD": 10.0,
-    
+
     "//": "==========================================================",
-    "//": " MOONSHOT CUSTOM FLOORPLAN & IR DROP MITIGATION",
+    "//": " MOONSHOT CARAVEL INTEGRATION: real CIM MAC tile inside the",
+    "//": " fixed user_project_wrapper die, with over-provisioned PDN.",
     "//": "==========================================================",
-    "//": " Because our mathematical simulations proved that IR drop",
-    "//": " (center voltage sag) causes catastrophic MSE degradation",
-    "//": " in Analog CIM arrays, we are heavily over-provisioning",
-    "//": " the Power Delivery Network (PDN).",
-    
+
+    "SYNTH_STRATEGY": "DELAY 0",
+
     "FP_SIZING": "absolute",
     "DIE_AREA": "0 0 2920 3520",
-    
+
     "FP_PDN_CORE_RING": 1,
     "FP_PDN_CORE_RING_VWIDTH": 3.1,
     "FP_PDN_CORE_RING_HWIDTH": 3.1,
@@ -25,13 +24,15 @@
     "FP_PDN_VPITCH": 25.0,
     "FP_PDN_HOFFSET": 14.0,
     "FP_PDN_HPITCH": 25.0,
-    
-    "//": " Leaving 60% of the die empty for massive analog macro routing",
+
+    "//": " Fixed Caravel die is far larger than the MAC; rest is decap fill.",
     "PL_TARGET_DENSITY": 0.40,
-    
+
     "VDD_NETS": ["vccd1", "vdda1", "vdda2"],
     "GND_NETS": ["vssd1", "vssa1", "vssa2"],
-    
-    "DIODE_INSERTION_STRATEGY": 4,
+
+    "GRT_REPAIR_ANTENNAS": 1,
+    "RUN_HEURISTIC_DIODE_INSERTION": 1,
+    "DIODE_ON_PORTS": "both",
     "ROUTING_CORES": 8
 }
